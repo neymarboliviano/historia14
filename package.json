@@ -1,0 +1,10 @@
+{
+  "name": "historia-quest-simples",
+  "version": "2.0.0",
+  "description": "História Quest — versão simples sem arquitetura de camadas",
+  "main": "server.js",
+  "scripts": { "start": "node server.js", "dev": "nodemon server.js" },
+  "engines": { "node": ">=22.5.0" },
+  "dependencies": { "bcryptjs": "^2.4.3", "express": "^4.21.2", "express-session": "^1.18.1" },
+  "devDependencies": { "nodemon": "^3.1.9" }
+}

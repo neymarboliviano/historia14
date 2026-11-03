@@ -1,0 +1,34 @@
+// História Quest — versão simples, sem arquitetura de camadas.
+// As rotas e regras da aplicação ficam centralizadas neste arquivo.
+const express = require('express');
+const session = require('express-session');
+const path = require('path');
+const bcrypt = require('bcryptjs');
+const { initializeDatabase } = require('./database');
+const { db } = require('./database');
+const User = require('./User');
+const learning = require('./learning');
+const auth = require('./auth');
+initializeDatabase();
+const app = express(); const PORT = process.env.PORT || 3000;
+app.use(express.json({limit:'100kb'})); app.use(express.urlencoded({extended:false}));
+app.use(session({name:'hq.sid',secret:process.env.SESSION_SECRET||'historia-quest-local-secret-change-before-publishing',resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:'lax',secure:false,maxAge:8*60*60*1000}}));
+app.use(express.static(__dirname));
+const wrap = fn => (req,res,next) => Promise.resolve(fn(req,res,next)).catch(next);
+const logged = (req,res,next) => req.session.userId ? next() : res.status(401).json({error:'Entre na sua conta para continuar.'});
+app.get('/api/auth/me',wrap(async(req,res)=>{if(!req.session.userId)return res.json({authenticated:false});const user=auth.getCurrentUser(req.session.userId);if(!user){req.session.destroy(()=>{});return res.json({authenticated:false});}res.json({authenticated:true,user:user.toPublicJSON()});}));
+app.post('/api/auth/register',wrap(async(req,res)=>{const user=await auth.register({name:req.body.name,email:req.body.email,password:req.body.password,className:req.body.className});req.session.userId=user.id;res.status(201).json({user:user.toPublicJSON()});}));
+app.post('/api/auth/login',wrap(async(req,res)=>{const user=await auth.login(req.body);req.session.userId=user.id;res.json({user:user.toPublicJSON()});}));
+app.post('/api/auth/logout',(req,res)=>req.session.destroy(err=>{if(err)return res.status(500).json({error:'Não foi possível encerrar a sessão.'});res.clearCookie('hq.sid');res.json({message:'Sessão encerrada.'});}));
+app.get('/api/dashboard',logged,(req,res)=>res.json(learning.getDashboard(req.session.userId)));
+app.get('/api/eras',logged,(req,res)=>res.json(learning.getEras(req.session.userId)));
+app.get('/api/challenges',logged,(req,res)=>res.json(learning.getChallenges(req.session.userId)));
+app.get('/api/challenges/:id',logged,(req,res,next)=>{try{res.json(learning.getChallenge(req.session.userId,req.params.id));}catch(e){next(e)}});
+app.post('/api/challenges/:id/answer',logged,(req,res,next)=>{try{res.json(learning.submitAnswer(req.session.userId,req.params.id,req.body.questionId,req.body.selectedIndex));}catch(e){next(e)}});
+app.post('/api/challenges/:id/finish',logged,(req,res,next)=>{try{res.json(learning.finishChallenge(req.session.userId,req.params.id,req.body.answers));}catch(e){next(e)}});
+app.get('/api/progress',logged,(req,res)=>res.json(learning.getProgress(req.session.userId)));
+app.get('/api/ranking',logged,(req,res)=>res.json(learning.getRanking(req.session.userId)));
+app.patch('/api/profile',logged,(req,res,next)=>{try{const user=learning.updateProfile(req.session.userId,req.body);res.json({user:user.toPublicJSON()});}catch(e){next(e)}});
+app.get('*',(req,res)=>res.sendFile(path.join(__dirname,'index.html')));
+app.use((err,req,res,next)=>{console.error(err);res.status(err.status||500).json({error:err.status?err.message:'Erro interno. Tente novamente.'});});
+app.listen(PORT,()=>console.log(`História Quest disponível em http://localhost:${PORT}`));
